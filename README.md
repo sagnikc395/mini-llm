@@ -1,6 +1,6 @@
-## qwen3.5
+## mini-llm
 
-Implementation of Qwen 3.5 from first principles.
+Implementation of a Qwen 3.5 level LLM from first principles.
 
 ## Resources:
 
