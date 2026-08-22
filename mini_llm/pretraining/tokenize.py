@@ -48,5 +48,13 @@ class SimpleTokenizer:
         text = re.sub(r'\s+([,.?!"()\'])',r'\1',text) 
         return text 
     
+tokenizer = SimpleTokenizer(vocab)
+sample_text = raw_text[:500]
+# turn the embeddings into ids
+ids = tokenizer.encode(sample_text)
+print(ids)
+
+# and them turn them back 
+print(tokenizer.decode(ids))
 
         
