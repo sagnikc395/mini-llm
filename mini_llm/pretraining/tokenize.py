@@ -40,6 +40,8 @@ class SimpleTokenizer:
         preprocessed = [
             item.strip() for item in preprocessed if item.strip()
         ]
+        #replace unknown words by <|unk|> tokens 
+        preprocessed = [item if item in self.str_to_int else "<|unk|>" for item in preprocessed]
         ids = [self.str_to_int[s] for s in preprocessed]
         return ids 
     
@@ -50,13 +52,19 @@ class SimpleTokenizer:
         text = re.sub(r'\s+([,.?!"()\'])',r'\1',text) 
         return text 
     
+# tokenizer = SimpleTokenizer(vocab)
+# sample_text = raw_text[:500]
+# # turn the embeddings into ids
+# ids = tokenizer.encode(sample_text)
+# print(ids)
+
+# # and them turn them back 
+# print(tokenizer.decode(ids))
+
+text1 = "hello, do you like tea?"
+text2 = "In the sunlit terraces of the palace."
+text = " <|endoftext|> ".join((text1,text2))
+print(text)
+
 tokenizer = SimpleTokenizer(vocab)
-sample_text = raw_text[:500]
-# turn the embeddings into ids
-ids = tokenizer.encode(sample_text)
-print(ids)
-
-# and them turn them back 
-print(tokenizer.decode(ids))
-
-        
+print(tokenizer.encode(raw_text))        
