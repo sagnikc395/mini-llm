@@ -31,3 +31,15 @@ dataloader = create_dataloader_v1(
 data_iter = iter(dataloader)
 first_batch = next(data_iter)
 print(first_batch)
+
+# more batch sizes 
+
+dataloader2 = create_dataloader_v1(
+    raw_text,batch_size=8,max_length=4,stride=4,
+    shuffle=False
+)
+
+data_iter = iter(dataloader2)
+inputs, targets = next(data_iter)
+print("inputs: \n",inputs)
+print("\ntargets: \n",targets)
