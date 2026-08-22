@@ -11,3 +11,17 @@ preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
 preprocessed = [item.strip() for item in preprocessed if item.strip()]
 print(len(preprocessed))
 
+# building a dictionary 
+all_words = sorted(set(preprocessed))
+vocab_size= len(all_words)
+print(vocab_size)
+
+# print the vocab 
+
+vocab = {token: integer for integer, token in enumerate(all_words)}
+#print the first 50 items of the vocabulary 
+for k,v in enumerate(vocab.items()):
+    print(v)
+    if k >= 50:
+        break 
+      
