@@ -1,6 +1,7 @@
 from pathlib import Path
 #from tokenizer_run import tokenizer
 from dataset_loader import create_dataloader_v1
+import torch 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FILE_PATH = PROJECT_ROOT / "data" / "the_verdict.txt"
@@ -43,3 +44,4 @@ data_iter = iter(dataloader2)
 inputs, targets = next(data_iter)
 print("inputs: \n",inputs)
 print("\ntargets: \n",targets)
+
