@@ -16,7 +16,12 @@ Implementation of a Qwen 3.5 level LLM from first principles.
 
 ## Flow:
 
+0. Edit `llm/config.py` to change any configurations or hyperparameters.
+
+
 1. Download Pretraining Data as 
 ```
 uv run python -m llm.pretraining.download_data
 ```
+
+2. 
