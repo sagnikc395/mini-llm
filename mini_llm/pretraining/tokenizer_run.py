@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import tiktoken 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FILE_PATH = PROJECT_ROOT / "data" / "the_verdict.txt"
@@ -75,3 +76,14 @@ print(ids[:50])
 
 # now about decoding
 print(tokenizer.decode(ids[:50]))
+
+# checking against the reference tiktoken 
+
+print("======= TIKTOKEN IMPLEMENTATION ===========",end=
+      "\n")
+enc = tiktoken.get_encoding("gpt2")
+tokens = enc.encode(raw_text[:500],allowed_special={"<|endoftext|>"})
+print(tokens)
+
+decoded_text = enc.decode(tokens)
+print(f"decoded: {decoded_text}")
