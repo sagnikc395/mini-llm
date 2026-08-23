@@ -85,3 +85,27 @@ query_2 = x_2 @ w_query
 key_2 = x_2 @ w_key 
 value_2 = x_2 @ w_value
 print(query_2)
+
+
+# obtains the all keys and values via matrix multiplication 
+keys = inputs @ w_key
+values = inputs @ w_value
+print(f"keys.shape: {keys.shape}")
+print(f"values.shape: {values.shape}")
+
+# computing the attention score w22
+
+keys_2 = keys[1]
+attn_scores_22 = query_2.dot(keys_2)
+print(attn_scores_2)
+
+# can then again generalize this computation to all attention scores via matrix multiplication 
+attn_scores_2 = query_2 @ keys.T 
+# this calculates all the attention scores for given query
+print(attn_scores_2)
+
+# compute the attention weights by scaling the attention scores and using the softmax function. now however, we scale the attention scores by dividing them by the square root of the embedding dimensions of the keys 
+
+d_k = keys.shape[-1]
+attn_weights_2 = torch.softmax(attn_scores_2 / d_k**0.5, dim=-1)
+print(attn_weights_2)
