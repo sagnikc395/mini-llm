@@ -36,3 +36,9 @@ print(f"sum: {attn_weights_2_naive.sum()}")
 attn_weights_2 = torch.softmax(attn_scores_2,dim=0)
 print(f"attention weights: {attn_weights_2}")
 print(f"sum: {attn_weights_2.sum()}")
+
+query = inputs[1]
+context_vec_2 = torch.zeros(query.shape)
+for i, x_i in enumerate(inputs):
+    context_vec_2 += attn_weights_2[i]*x_i 
+print(context_vec_2)
