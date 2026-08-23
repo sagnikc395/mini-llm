@@ -65,3 +65,23 @@ print(f"all row sums: {attn_weights.sum(dim=-1)}")
 
 all_context_vecs = attn_weights @ inputs 
 print(all_context_vecs)
+
+# second input element 
+x_2 = inputs[1]
+# input embeddng size, d = 3
+d_in = inputs.shape[1]
+# output embedding size, d_out = 2
+d_out = 2
+# defining the weight matrics Wq, Wk and Wv 
+torch.manual_seed(123)
+w_query = torch.nn.Parameter(torch.rand(d_in,d_out),requires_grad=False)
+w_key = torch.nn.Parameter(torch.rand(d_in,d_out),requires_grad=False)
+w_value = torch.nn.Parameter(torch.rand(d_in,d_out),requires_grad=False)
+
+# requires_grad set to false to reduce clutter in the outputs, but for weight matrices for model training , we would set requires_grad=True to update these matrices during model training.
+
+# compute the query,key and value vectors 
+query_2 = x_2 @ w_query
+key_2 = x_2 @ w_key 
+value_2 = x_2 @ w_value
+print(query_2)
