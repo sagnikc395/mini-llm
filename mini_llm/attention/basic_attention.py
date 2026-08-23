@@ -57,3 +57,8 @@ print(attn_scores)
 # then normalize each row so that the values in each row sum to 1 
 attn_weights = torch.softmax(attn_scores,dim=-1)
 print(attn_weights)
+
+# can verify the rows indeed all sum to 1 
+row_2_sums = sum([0.1385, 0.2379, 0.2333, 0.1240, 0.1082, 0.1581])
+print(f"row 2 sum: {row_2_sums}")
+print(f"all row sums: {attn_weights.sum(dim=-1)}")
