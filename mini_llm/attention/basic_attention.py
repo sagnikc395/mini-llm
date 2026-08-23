@@ -62,3 +62,6 @@ print(attn_weights)
 row_2_sums = sum([0.1385, 0.2379, 0.2333, 0.1240, 0.1082, 0.1581])
 print(f"row 2 sum: {row_2_sums}")
 print(f"all row sums: {attn_weights.sum(dim=-1)}")
+
+all_context_vecs = attn_weights @ inputs 
+print(all_context_vecs)
