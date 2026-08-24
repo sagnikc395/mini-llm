@@ -1,5 +1,6 @@
 import torch.nn as nn 
 import torch 
+from basic_attention import inputs
 
 class SelfAttention(nn.Module):
     def __init__(self,d_in,d_out):
@@ -39,3 +40,19 @@ class SelfAttentionV2(nn.Module):
         )
         context_vec = attn_weights @ values 
         return context_vec
+    
+d_in = inputs.shape[1]
+# output embedding size, d_out = 2
+d_out = 2
+
+torch.manual_seed(789)
+sav2 = SelfAttentionV2(d_in,d_out)
+print(sav2(inputs))
+
+## adding causal mask 
+# reuse the query and key weight matrices of the SelfAttention object from the previous section for convenience
+queries = sav2.w_query(inputs)
+keys = sav2.w_key(inputs)
+attn_scores = queries @ keys.T 
+attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5 ,dim=-1)
+print(attn_weights)
