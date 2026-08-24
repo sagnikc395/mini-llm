@@ -56,3 +56,9 @@ keys = sav2.w_key(inputs)
 attn_scores = queries @ keys.T 
 attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5 ,dim=-1)
 print(attn_weights)
+
+# tril function to create a mask where the values above the diagonal are 0 
+
+contenxt_length = attn_scores.shape[0]
+mask_simple = torch.tril(torch.ones(contenxt_length,contenxt_length))
+print(mask_simple)
