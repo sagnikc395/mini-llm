@@ -62,3 +62,10 @@ print(attn_weights)
 contenxt_length = attn_scores.shape[0]
 mask_simple = torch.tril(torch.ones(contenxt_length,contenxt_length))
 print(mask_simple)
+
+masked_simple = attn_weights * mask_simple
+print(masked_simple)
+
+row_sums = masked_simple.sum(dim=-1,keepdim=True)
+masked_simple_norm = masked_simple / row_sums 
+print(masked_simple_norm)
