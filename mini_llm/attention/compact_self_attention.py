@@ -79,3 +79,16 @@ print(masked)
 # then again apply the softmax function to these masked results
 attn_weights = torch.softmax(masked / keys.shape[-1]**0.5,dim=1)
 print(attn_weights)
+
+
+torch.manual_seed(123)
+# dropout rate of 50%
+dropout = torch.nn.Dropout(0.5)
+example = torch.ones(6,6)
+print("50% DROPOUT")
+print(dropout(example))
+
+print("adding dropout to ")
+torch.manual_seed(123)
+print(dropout(attn_weights))
+
