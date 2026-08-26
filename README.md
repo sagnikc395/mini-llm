@@ -2,6 +2,35 @@
 
 following along the  { sebastian raschka (building an LLM from scratch) + nathan lambert(RLHF - aka the post-training) } book.
 
+## mental model of the whole flow
+
+```
+TRAINING SYSTEM                         INFERENCE SYSTEM
+
+raw text
+   ↓
+tokenizer
+   ↓
+pretraining
+   ↓
+base checkpoint
+   ↓
+SFT / DPO / RLHF / RLVR
+   ↓
+final checkpoint
+   │
+   └───────────────────────→ model loader
+                                ↓
+                           inference runtime
+                                ↓
+                         KV cache + scheduler
+                                ↓
+                           sampling / decode
+                                ↓
+                              server
+```
+
+
 ## Additional Resources that I found helpful throughout this 
 
 1. Reading the [Scaling Laws, Carefully](https://lilianweng.github.io/posts/2026-06-24-scaling-laws/) post help me understand why LLMs require so much scale and learnt about different types of scaling laws(before this I had only learnt about the Kaplan Scaling Laws from CS685). Blog post on my learning soon.
