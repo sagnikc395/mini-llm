@@ -1,7 +1,8 @@
 from pathlib import Path
-#from tokenizer_run import tokenizer
+
+# from tokenizer_run import tokenizer
 from dataset_loader import create_dataloader_v1
-import torch 
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FILE_PATH = PROJECT_ROOT / "data" / "the_verdict.txt"
@@ -18,7 +19,7 @@ print(raw_text[:99])
 
 # enc_sample = enc_text[50:]
 
-# # create two variables x and y, where x contains the input tokens and y contains the targets, which are the inputs shifted by 1 
+# # create two variables x and y, where x contains the input tokens and y contains the targets, which are the inputs shifted by 1
 
 # context_size = 4
 # x = enc_sample[:context_size]
@@ -27,21 +28,19 @@ print(raw_text[:99])
 # print(f"y: {y}")
 
 dataloader = create_dataloader_v1(
-    raw_text,batch_size=1,max_length=4,stride=1,shuffle=False
+    raw_text, batch_size=1, max_length=4, stride=1, shuffle=False
 )
 data_iter = iter(dataloader)
 first_batch = next(data_iter)
 print(first_batch)
 
-# more batch sizes 
+# more batch sizes
 
 dataloader2 = create_dataloader_v1(
-    raw_text,batch_size=8,max_length=4,stride=4,
-    shuffle=False
+    raw_text, batch_size=8, max_length=4, stride=4, shuffle=False
 )
 
 data_iter = iter(dataloader2)
 inputs, targets = next(data_iter)
-print("inputs: \n",inputs)
-print("\ntargets: \n",targets)
-
+print("inputs: \n", inputs)
+print("\ntargets: \n", targets)
