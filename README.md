@@ -39,7 +39,8 @@ final checkpoint
 
 3. Inference 
     - how to serve the model effectively ? 
-    - [Paged Atetntion from First Principles](https://hamzaelshafie.bearblog.dev/paged-attention-from-first-principles-a-view-inside-vllm/)
+    - [Paged Attention from First Principles](https://hamzaelshafie.bearblog.dev/paged-attention-from-first-principles-a-view-inside-vllm/)
+    - [Tutorial on LLM inference](https://github.com/garg-aayush/building-from-scratch/tree/main/llm-inference) this seems like a cool inference repo by the author, checking this out.
 
 4. [Post Training Course](https://rlhfbook.com/course) this is one course , that I plan to do after I finish this, as I am very interested in AI Alignment , but post training is something that I haven't done very handson, but rather read it mostly as a chapter in CS685. Excited to go over this lectures soon !
 
