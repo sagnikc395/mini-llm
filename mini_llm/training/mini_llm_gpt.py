@@ -11,7 +11,9 @@ class GPTModel(nn.Module):
         self.pos_emb = nn.Embedding(cfg.context_length, cfg.emb_dim)
         self.drop_emb = nn.Dropout(cfg.drop_rate)
         # this acts as a placeholder for TransformerBlock
-        self.trf_blocks = nn.Sequential(*[GPTModel(cfg) for _ in range(cfg.n_layers)])
+        self.trf_blocks = nn.Sequential(
+            *[TransformerBlock(cfg) for _ in range(cfg.n_layers)]
+        )
         # this act as a placeholder for LayerNorm
         self.final_norm = LayerNorm(cfg.emb_dim)
         self.out_head = nn.Linear(cfg.emb_dim, cfg.vocab_size, bias=False)
@@ -30,8 +32,8 @@ class GPTModel(nn.Module):
 
 class TransformerBlock(nn.Module):
     # placeholder for a real transformerblock
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, cfg):
+        super().__init__()
 
     def forward(self, x):
         return x
@@ -39,8 +41,8 @@ class TransformerBlock(nn.Module):
 
 class LayerNorm(nn.Module):
     # placeholder for a real layernorm block
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, normalized_shape, eps=1e-5):
+        super().__init__()
 
     def forward(self, x):
         return x
