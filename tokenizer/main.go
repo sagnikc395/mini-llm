@@ -1,130 +1,232 @@
 package main
 
 import (
-	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
-	"strconv"
+	"runtime"
+	"runtime/debug"
+	"time"
 )
 
-// use a struct to represent the most common pairs
-type Pair struct {
-	A, B int
-}
+const usage = `mini-llm tokenizer — multi-threaded byte-level BPE
 
-func getStats(tokens []int) map[Pair]int {
-	counts := make(map[Pair]int)
-	for i := 0; i < len(tokens)-1; i++ {
-		counts[Pair{tokens[i], tokens[i+1]}] += 1
-	}
-	return counts
-}
+usage:
+  tokenizer train  -in corpus.txt -out model.json [-vocab 4096] [-threads N]
+  tokenizer encode -model model.json -in text.txt -out tokens.txt [-binary]
+  tokenizer decode -model model.json -in tokens.txt -out text.txt [-binary]
+  tokenizer bench  -in corpus.txt [-vocab 4096] [-threads N]
 
-// method for the most common pair
-func findMostCommonPair(tokens []int) Pair {
-	counts := getStats(tokens)
-	mostCommon := Pair{}
-	maxCount := -1
-
-	for k, v := range counts {
-		if v > maxCount {
-			maxCount = v
-			mostCommon = k
-		}
-	}
-
-	return mostCommon
-}
-
-// step3: merging tokens ; once we have found the most common pairs, we
-// can replace it with a new token
-
-func merge(ids []int, pair Pair, idx int) []int {
-	newIds := make([]int, 0)
-	i := 0
-	for i < len(ids) {
-		if i < len(ids)-1 && ids[i] == pair.A && ids[i+1] == pair.B {
-			newIds = append(newIds, idx)
-			i += 2
-		} else {
-			newIds = append(newIds, ids[i])
-			i += 1
-		}
-	}
-	return newIds
-}
-
-// step1: ingestion — raw text -> initial token ids.
-// BPE starts from the raw UTF-8 bytes, so every byte of the text
-// is an initial token id in [0, 255]. No vocab needed yet.
-func ingest(text string) []int {
-	raw := []byte(text) // UTF-8 bytes, NOT runes (see note below)
-	ids := make([]int, len(raw))
-	for i, b := range raw {
-		ids[i] = int(b)
-	}
-	return ids
-}
-
-// write the final token ids to a file, one per line. Plain text so the
-// output is diffable and can be streamed back in later with a scanner.
-func saveTokens(ids []int, path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	w := bufio.NewWriter(f)
-	for _, id := range ids {
-		if _, err := w.WriteString(strconv.Itoa(id) + "\n"); err != nil {
-			return err
-		}
-	}
-	return w.Flush()
-}
+run any subcommand with -h for its flags.
+`
 
 func main() {
-	// ingestion: either pass a corpus file as the first argument
-	// (go run main.go corpus.txt) or fall back to an inline string.
-	var text string
-	if len(os.Args) > 1 {
-		data, err := os.ReadFile(os.Args[1])
-		if err != nil {
-			log.Fatal(err)
-		}
-		text = string(data)
-	} else {
-		text = "the quick brown fox jumps over the lazy dog"
+	log.SetFlags(0)
+	if len(os.Args) < 2 {
+		fmt.Print(usage)
+		return
 	}
-
-	ids := ingest(text)
-	fmt.Printf("ingested %d bytes -> %d initial tokens\n", len(text), len(ids))
-
-	// step4: training loop — repeatedly merge the most common pair
-	// with a fresh token id (ids 0-255 are already taken by the bytes).
-	const numMerges = 20
-	merges := make(map[Pair]int)
-	for i := 0; i < numMerges && len(ids) >= 2; i++ {
-		pair := findMostCommonPair(ids)
-		newId := 256 + i
-		ids = merge(ids, pair, newId)
-		merges[pair] = newId
-		fmt.Printf("merge %2d: %v -> %d (len now %d)\n", i+1, pair, newId, len(ids))
+	switch os.Args[1] {
+	case "train":
+		cmdTrain(os.Args[2:])
+	case "encode":
+		cmdEncode(os.Args[2:])
+	case "decode":
+		cmdDecode(os.Args[2:])
+	case "bench":
+		cmdBench(os.Args[2:])
+	case "-h", "--help", "help":
+		fmt.Print(usage)
+	default:
+		fmt.Print(usage)
+		os.Exit(2)
 	}
+}
 
-	fmt.Println("final ids:", ids)
-	fmt.Printf("compression: %d bytes -> %d tokens\n", len([]byte(text)), len(ids))
+func mb(n int) float64 { return float64(n) / (1 << 20) }
 
-	// persist the tokens: pass an output path as the second argument
-	// (go run main.go corpus.txt out.txt) or default to tokens.txt.
-	outPath := "tokens.txt"
-	if len(os.Args) > 2 {
-		outPath = os.Args[2]
+// Throughput is reported in MB of input text per second, never tokens per
+// second — tokens/s conflates speed with compression ratio.
+func rate(n int, d time.Duration) float64 {
+	if d <= 0 {
+		return 0
 	}
-	if err := saveTokens(ids, outPath); err != nil {
+	return mb(n) / d.Seconds()
+}
+
+func cmdTrain(args []string) {
+	fs := flag.NewFlagSet("train", flag.ExitOnError)
+	in := fs.String("in", "", "corpus file (required)")
+	out := fs.String("out", "model.json", "output model path")
+	vocab := fs.Int("vocab", 4096, "target vocab size (>= 256)")
+	threads := fs.Int("threads", runtime.NumCPU(), "worker goroutines")
+	threshold := fs.Int("threshold", 2048, "affected-word count above which a merge iteration goes parallel")
+	verbose := fs.Bool("v", false, "print every merge")
+	gogc := fs.Int("gogc", 400, "GOGC during training; raising it is usually a clear win here")
+	fs.Parse(args)
+
+	if *in == "" {
+		fs.Usage()
+		os.Exit(2)
+	}
+	if *vocab <= 256 {
+		log.Fatalf("vocab must be > 256 (256 byte values are the base vocab)")
+	}
+	debug.SetGCPercent(*gogc)
+
+	data, closeFn, err := mmapFile(*in)
+	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("wrote %d tokens to %s\n", len(ids), outPath)
+	defer closeFn()
+
+	total := time.Now()
+
+	t0 := time.Now()
+	toks, freqs := CountTypes(data, *threads)
+	d1 := time.Since(t0)
+	nTok := int64(0)
+	for _, f := range freqs {
+		nTok += f
+	}
+	fmt.Printf("phase 1  %7.2f MB -> %d types (%d pre-tokens)  %v  %.1f MB/s\n",
+		mb(len(data)), len(toks), nTok, d1.Round(time.Millisecond), rate(len(data), d1))
+
+	t0 = time.Now()
+	tr := NewTrainer(toks, freqs, *threads, *threshold)
+	d2 := time.Since(t0)
+	fmt.Printf("phase 2a arena + initial pair count: %d distinct pairs  %v\n", len(tr.pairCount), d2.Round(time.Millisecond))
+
+	t0 = time.Now()
+	var progress func(int, Merge, int64)
+	if *verbose {
+		progress = func(rank int, m Merge, c int64) {
+			fmt.Printf("  merge %5d: (%d,%d) -> %d  count %d\n", rank, m.A, m.B, m.New, c)
+		}
+	}
+	merges := tr.Train(*vocab-256, progress)
+	d3 := time.Since(t0)
+	fmt.Printf("phase 2b %d merges  %v  (%.0f merges/s)\n",
+		len(merges), d3.Round(time.Millisecond), float64(len(merges))/d3.Seconds())
+
+	if err := SaveModel(*out, merges); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("wrote %s (vocab %d) — total %v, %.1f MB/s end to end\n",
+		*out, 256+len(merges), time.Since(total).Round(time.Millisecond), rate(len(data), time.Since(total)))
+}
+
+func cmdEncode(args []string) {
+	fs := flag.NewFlagSet("encode", flag.ExitOnError)
+	model := fs.String("model", "model.json", "model file")
+	in := fs.String("in", "", "input text (required)")
+	out := fs.String("out", "tokens.txt", "output token file")
+	binaryFmt := fs.Bool("binary", false, "write little-endian uint32 instead of one id per line")
+	threads := fs.Int("threads", runtime.NumCPU(), "worker goroutines")
+	fs.Parse(args)
+	if *in == "" {
+		fs.Usage()
+		os.Exit(2)
+	}
+
+	merges, err := LoadModel(*model)
+	if err != nil {
+		log.Fatal(err)
+	}
+	enc := NewEncoder(merges)
+
+	data, closeFn, err := mmapFile(*in)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeFn()
+
+	t0 := time.Now()
+	ids := enc.Encode(data, *threads)
+	d := time.Since(t0)
+
+	if err := SaveTokens(*out, ids, *binaryFmt); err != nil {
+		log.Fatal(err)
+	}
+	ratio := 0.0
+	if len(ids) > 0 {
+		ratio = float64(len(data)) / float64(len(ids))
+	}
+	fmt.Printf("encoded %.2f MB -> %d tokens in %v (%.1f MB/s), %.2f bytes/token, wrote %s\n",
+		mb(len(data)), len(ids), d.Round(time.Millisecond), rate(len(data), d), ratio, *out)
+}
+
+func cmdDecode(args []string) {
+	fs := flag.NewFlagSet("decode", flag.ExitOnError)
+	model := fs.String("model", "model.json", "model file")
+	in := fs.String("in", "", "token file (required)")
+	out := fs.String("out", "decoded.txt", "output text file")
+	binaryFmt := fs.Bool("binary", false, "input is little-endian uint32")
+	fs.Parse(args)
+	if *in == "" {
+		fs.Usage()
+		os.Exit(2)
+	}
+
+	merges, err := LoadModel(*model)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ids, err := LoadTokens(*in, *binaryFmt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	text := NewEncoder(merges).Decode(ids)
+	if err := os.WriteFile(*out, text, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("decoded %d tokens -> %.2f MB, wrote %s\n", len(ids), mb(len(text)), *out)
+}
+
+// cmdBench trains and then encodes the same corpus, reporting per-phase
+// throughput at 1..N threads so the scaling is visible.
+func cmdBench(args []string) {
+	fs := flag.NewFlagSet("bench", flag.ExitOnError)
+	in := fs.String("in", "", "corpus file (required)")
+	vocab := fs.Int("vocab", 4096, "target vocab size")
+	maxThreads := fs.Int("threads", runtime.NumCPU(), "highest thread count to try")
+	threshold := fs.Int("threshold", 2048, "parallel gate for the merge loop")
+	fs.Parse(args)
+	if *in == "" {
+		fs.Usage()
+		os.Exit(2)
+	}
+	debug.SetGCPercent(400)
+
+	data, closeFn, err := mmapFile(*in)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeFn()
+	fmt.Printf("corpus %.2f MB, vocab %d\n\n", mb(len(data)), *vocab)
+	fmt.Printf("%8s %14s %14s %14s %14s\n", "threads", "count MB/s", "merge s", "encode MB/s", "bytes/token")
+
+	for n := 1; n <= *maxThreads; n *= 2 {
+		t0 := time.Now()
+		toks, freqs := CountTypes(data, n)
+		dCount := time.Since(t0)
+
+		t0 = time.Now()
+		tr := NewTrainer(toks, freqs, n, *threshold)
+		merges := tr.Train(*vocab-256, nil)
+		dTrain := time.Since(t0)
+
+		enc := NewEncoder(merges)
+		t0 = time.Now()
+		ids := enc.Encode(data, n)
+		dEnc := time.Since(t0)
+
+		ratio := 0.0
+		if len(ids) > 0 {
+			ratio = float64(len(data)) / float64(len(ids))
+		}
+		fmt.Printf("%8d %14.1f %14.2f %14.1f %14.2f\n",
+			n, rate(len(data), dCount), dTrain.Seconds(), rate(len(data), dEnc), ratio)
+	}
 }
