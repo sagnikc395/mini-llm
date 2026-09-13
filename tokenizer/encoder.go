@@ -58,12 +58,27 @@ func (e *Encoder) encodeToken(tok []byte, buf []uint32) []uint32 {
 	return buf
 }
 
+// tokenCache maps a pre-token to a span of ids in a flat arena.
+//
+// The arena exists to kill an allocation: a map[string][]uint32 costs a slice
+// header plus a backing array per entry, and with tens of thousands of types
+// per worker that allocation traffic shows up as GC and madvise time. Offsets
+// stay valid when the arena grows, so lookups are a hash plus a reslice.
+type tokenCache struct {
+	idx   map[string]uint64 // key -> off<<32 | length
+	arena []uint32
+}
+
+func newTokenCache() *tokenCache {
+	return &tokenCache{idx: make(map[string]uint64, 1<<12), arena: make([]uint32, 0, 1<<16)}
+}
+
 // encodeChunk encodes a boundary-safe byte range using a private cache. Plain
 // map, no locking: some duplication across workers, zero contention. A single
 // locked cache would negate the threading, and sync.Map's access pattern is
 // wrong for this.
 func (e *Encoder) encodeChunk(data []byte, out []uint32) []uint32 {
-	cache := make(map[string][]uint32, 1<<12)
+	c := newTokenCache()
 	buf := make([]uint32, 0, 64)
 	s := scanner{b: data}
 	for {
@@ -74,21 +89,24 @@ func (e *Encoder) encodeChunk(data []byte, out []uint32) []uint32 {
 		tok := data[lo:hi]
 		// Pre-token frequency is Zipfian, so hit rates above 95% are normal
 		// and this turns encoding into hashing plus memcpy.
-		if ids, hit := cache[string(tok)]; hit {
-			out = append(out, ids...)
+		if v, hit := c.idx[string(tok)]; hit { // no-alloc lookup form
+			off, n := uint32(v>>32), uint32(v)
+			out = append(out, c.arena[off:off+n]...)
 			continue
 		}
 		buf = e.encodeToken(tok, buf)
-		ids := make([]uint32, len(buf))
-		copy(ids, buf)
-		cache[string(tok)] = ids
-		out = append(out, ids...)
+		off := uint32(len(c.arena))
+		c.arena = append(c.arena, buf...)
+		c.idx[string(tok)] = uint64(off)<<32 | uint64(len(buf))
+		out = append(out, buf...)
 	}
 }
 
-// Encode tokenizes data with `workers` goroutines over boundary-safe chunks
-// and concatenates the per-chunk results in order.
-func (e *Encoder) Encode(data []byte, workers int) []uint32 {
+// EncodeChunks tokenizes data in parallel and returns the per-chunk id slices
+// in order. Callers that stream the result (the CLI writes straight to a file)
+// should prefer this over Encode: concatenating the parts costs a full copy of
+// the token stream, which for a large corpus is tens of MB of pure memmove.
+func (e *Encoder) EncodeChunks(data []byte, workers int) [][]uint32 {
 	if workers < 1 {
 		workers = runtime.NumCPU()
 	}
@@ -96,7 +114,7 @@ func (e *Encoder) Encode(data []byte, workers int) []uint32 {
 		return nil
 	}
 	if workers == 1 {
-		return e.encodeChunk(data, make([]uint32, 0, len(data)/3))
+		return [][]uint32{e.encodeChunk(data, make([]uint32, 0, estimateTokens(len(data))))}
 	}
 
 	bounds := splitBounds(data, workers)
@@ -110,11 +128,25 @@ func (e *Encoder) Encode(data []byte, workers int) []uint32 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			parts[i] = e.encodeChunk(data[lo:hi], make([]uint32, 0, (hi-lo)/3+8))
+			parts[i] = e.encodeChunk(data[lo:hi], make([]uint32, 0, estimateTokens(hi-lo)))
 		}()
 	}
 	wg.Wait()
+	return parts
+}
 
+// estimateTokens pre-sizes an output buffer. Byte-level BPE at a few thousand
+// merges lands around 4 bytes per token on real text; guessing a little high
+// wastes memory, guessing low costs a regrow and a copy.
+func estimateTokens(nbytes int) int { return nbytes/4 + 16 }
+
+// Encode tokenizes data with `workers` goroutines over boundary-safe chunks
+// and concatenates the per-chunk results in order.
+func (e *Encoder) Encode(data []byte, workers int) []uint32 {
+	parts := e.EncodeChunks(data, workers)
+	if len(parts) == 1 {
+		return parts[0]
+	}
 	n := 0
 	for _, p := range parts {
 		n += len(p)

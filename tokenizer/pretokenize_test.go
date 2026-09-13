@@ -26,9 +26,9 @@ func TestPretokenizeCases(t *testing.T) {
 		{"it's a 'quoted' word", []string{"it", "'s", " a", " '", "quoted", "'", " word"}},
 		{"abc123", []string{"abc", "123"}},
 		{"a  b", []string{"a", " ", " b"}},
-		{"   ", []string{"   "}},         // trailing run: plain \s+
-		{"   a", []string{"  ", " a"}},   // \s+(?!\S) gives back the last space
-		{"\n\nx", []string{"\n", "\nx"}}, // ...including newlines
+		{"   ", []string{"   "}},             // trailing run: plain \s+
+		{"   a", []string{"  ", " a"}},       // \s+(?!\S) gives back the last space
+		{"\n\nx", []string{"\n", "\n", "x"}}, // the " ?" prefix is a literal space, not \s
 		{"hi!?", []string{"hi", "!?"}},
 		{" !!", []string{" !!"}},
 		{"naïve café", []string{"naïve", " café"}}, // multi-byte letters
